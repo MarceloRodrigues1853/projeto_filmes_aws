@@ -1,13 +1,24 @@
 {
   "name": "projeto_filmes_aws",
   "version": "1.0.0",
-  "description": "",
+  "description": "API backend do sistema de filmes com integração AWS (RDS + S3)",
   "main": "index.js",
   "scripts": {
+    "dev": "nodemon --legacy-watch index.js",
+    "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "express",
+    "mysql",
+    "aws",
+    "rds",
+    "s3",
+    "jwt",
+    "backend",
+    "api"
+  ],
+  "author": "MarceloRodrigues1853",
   "license": "ISC",
   "dependencies": {
     "aws-sdk": "^2.1692.0",
@@ -19,5 +30,8 @@
     "multer": "^2.0.2",
     "mysql2": "^3.15.1",
     "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
   }
 }

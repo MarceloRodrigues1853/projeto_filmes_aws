@@ -1,4 +1,4 @@
-FROM node:20-alpine@sha256:secure-digest-placeholder
+FROM node:20-alpine
 
 WORKDIR /app
 
