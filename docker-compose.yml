@@ -21,7 +21,7 @@ services:
       dockerfile: Dockerfile
     container_name: projeto-filmes-frontend
     environment:
-      VITE_API_URL: http://backend:8080/api
+      VITE_API_URL: http://localhost:8080/api
     depends_on:
       - backend
     ports:

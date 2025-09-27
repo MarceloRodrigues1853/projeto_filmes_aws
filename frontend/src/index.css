@@ -2,8 +2,69 @@
 @tailwind components;
 @tailwind utilities;
 
-/* helpers opcionais */
-.container { @apply max-w-5xl mx-auto px-4; }
-.card { @apply bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm; }
-.btn { @apply inline-flex items-center justify-center px-4 py-2 rounded-xl bg-zinc-900 text-white hover:bg-zinc-800; }
-.btn-outline { @apply inline-flex items-center justify-center px-4 py-2 rounded-xl border border-zinc-300 hover:bg-zinc-50; }
+/* ---------- Tema base ---------- */
+:root {
+  color-scheme: light dark;
+}
+
+/* Container centralizado e responsivo */
+.container {
+  @apply mx-auto max-w-7xl px-4 sm:px-6 lg:px-8;
+}
+
+/* Cartão */
+.card {
+  @apply bg-white rounded-2xl shadow-sm p-4;
+}
+
+/* Botão principal */
+.btn {
+  @apply inline-flex justify-center items-center
+    px-4 py-2 rounded-xl font-medium
+    bg-sky-600 text-white
+    hover:bg-sky-700
+    focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2
+    transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+/* Botão contornado */
+.btn-outline {
+  @apply inline-flex justify-center items-center
+    px-4 py-2 rounded-xl font-medium
+    border border-zinc-300 text-zinc-700
+    hover:bg-zinc-50
+    focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2
+    transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+/* Inputs */
+input, select, textarea {
+  @apply border border-zinc-300 rounded-lg px-3 py-2 w-full
+    bg-white text-zinc-900
+    focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500;
+}
+
+/* ---------- Tema escuro ---------- */
+.dark body {
+  @apply bg-zinc-950 text-zinc-100;
+}
+
+.dark .card {
+  @apply bg-zinc-900 shadow-none border border-zinc-800;
+}
+
+.dark .btn-outline {
+  @apply border-zinc-700 text-zinc-200 hover:bg-zinc-800;
+}
+
+.dark input, .dark select, .dark textarea {
+  @apply border-zinc-700 bg-zinc-900 text-zinc-100 focus:ring-sky-500 focus:border-sky-500;
+}
+
+/* Links no dark */
+.dark a {
+  @apply text-sky-400;
+}
+.dark a:hover {
+  @apply text-sky-300;
+}
