@@ -1,11 +1,13 @@
 import { Routes, Route, Link, Navigate, Outlet, useNavigate, useLocation } from "react-router-dom";
-import Movies from "./Movies";
-import MovieDetail from "./MovieDetail";
-import Login from "./Login";
-import Recs from "./Recs";
-import Register from "./Register";
+import Movies from "./pages/Movies";
+import MovieDetail from "./pages/MovieDetail";
+import Login from "./pages/Login";
+import Recs from "./pages/Recs";
+import Register from "./pages/Register";
 import { useEffect, useState } from "react";
-import { initTheme, toggleTheme } from "../theme";
+import { initTheme, toggleTheme } from "./theme";
+import Layout from "./components/Layout";
+import Home from "./pages/Home";
 
 function Nav() {
   const raw = localStorage.getItem("user");
@@ -35,7 +37,19 @@ function Nav() {
     <nav className="bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 z-40">
       <div className="container py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link to="/" className="font-bold text-zinc-900 dark:text-zinc-100">🎬 Filmes</Link>
+          <Link to="/" className="font-bold text-zinc-900 dark:text-zinc-100" style={{ fontFamily: "var(--font-display)" }}>
+            🎬 Filmes
+          </Link>
+
+          <Link
+            to="/movies"
+            className={isActive('/movies')
+              ? "text-zinc-900 dark:text-zinc-100 font-medium"
+              : "text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100"}
+          >
+            Catálogo
+          </Link>
+
           <Link
             to="/recs"
             className={isActive('/recs')
@@ -47,7 +61,6 @@ function Nav() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Toggle de tema */}
           <button
             className="btn-outline"
             type="button"
@@ -84,14 +97,16 @@ function ProtectedRoute() {
 
 export default function App() {
   return (
-    <div>
+    <Layout>
       <Nav />
       <div className="container py-6">
         <Routes>
-          <Route path="/" element={<Movies />} />
+          <Route path="/" element={<Home />} />
+          <Route path="/movies" element={<Movies />} />
+          <Route path="/movie/:id" element={<MovieDetail />} />
+
           <Route path="/login" element={<Login onLogin={(u) => { if (u) localStorage.setItem("user", JSON.stringify(u)); }} />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/movie/:id" element={<MovieDetail />} />
 
           <Route element={<ProtectedRoute />}>
             <Route path="/recs" element={<Recs />} />
@@ -100,6 +115,6 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </div>
-    </div>
+    </Layout>
   );
 }
