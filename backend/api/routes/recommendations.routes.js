@@ -1,69 +1,70 @@
-// /api/routes/recommendations.routes.js
+// backend/api/routes/recommendations.routes.js
 const express = require('express');
-const path = require('path');
-const db = require(path.join(__dirname, '..', 'services', 'db.service.js'));
-const { authRequired } = require(path.join(__dirname, '..', 'services', 'auth.middleware.js'));
+const { query } = require('../services/db.service');
 
 const router = express.Router();
 
 /**
  * GET /api/recommendations
- * 1) gêneros preferidos (média >= 4)
- * 2) recomenda filmes desses gêneros que o usuário ainda não avaliou
- * 3) fallback: filmes populares (maior média/qtd; tratar NULL sem "NULLS LAST")
+ * Opções:
+ *  - ?limit=10                 -> quantidade de filmes
+ *  - ?userId=123               -> (opcional) personalizar pelo histórico do usuário
+ *
+ * Estratégia simples:
+ * 1) Calcula média de notas e contagem na tabela 'avaliacoes'
+ * 2) Ordena por média desc, depois por contagem desc, depois por criado_em desc
+ * 3) Retorna os campos que o front usa (titulo, genero, diretor, imagem_s3_url)
  */
-router.get('/', authRequired, async (req, res) => {
-  const userId = req.user.id;
-
+router.get('/', async (req, res, next) => {
   try {
-    // 1) gêneros preferidos
-    const [favGenres] = await db.query(`
-      SELECT f.genero, AVG(a.nota) AS media
-      FROM avaliacoes a
-      JOIN filmes f ON f.id = a.filme_id
-      WHERE a.usuario_id = ?
-        AND f.genero IS NOT NULL
-      GROUP BY f.genero
-      HAVING AVG(a.nota) >= 4
-      ORDER BY media DESC
-      LIMIT 3
-    `, [userId]);
+    const limit = Math.min(Math.max(parseInt(req.query.limit || '12', 10) || 12, 1), 50);
+    const userId = req.query.userId ? parseInt(req.query.userId, 10) : null;
 
-    let recs = [];
-    if (favGenres.length > 0) {
-      // 2) recomenda por gêneros
-      const genres = favGenres.map(g => g.genero);
-      const placeholders = genres.map(() => '?').join(',');
-      const [rows] = await db.query(`
-        SELECT f.*
-        FROM filmes f
-        WHERE f.genero IN (${placeholders})
-          AND f.id NOT IN (SELECT filme_id FROM avaliacoes WHERE usuario_id = ?)
-        ORDER BY f.criado_em DESC
-        LIMIT 20
-      `, [...genres, userId]);
-      recs = rows;
+    // Base: ranking geral por média/contagem
+    let rows = await query(
+      `SELECT
+         f.id,
+         f.titulo,
+         f.genero,
+         f.diretor,
+         f.imagem_s3_url,
+         COALESCE(AVG(a.nota), 0)       AS media_nota,
+         COUNT(a.nota)                   AS qtd_avaliacoes,
+         MAX(f.criado_em)                AS criado_em
+       FROM filmes f
+       LEFT JOIN avaliacoes a ON a.filme_id = f.id
+       GROUP BY f.id
+       ORDER BY media_nota DESC, qtd_avaliacoes DESC, criado_em DESC
+       LIMIT :limit`,
+      { limit }
+    );
+
+    // Personalização simples (opcional):
+    // se userId veio, tenta favorecer gêneros que o usuário mais avaliou bem
+    if (userId) {
+      const prefs = await query(
+        `SELECT f.genero, AVG(a.nota) AS media
+           FROM avaliacoes a
+           JOIN filmes f ON f.id = a.filme_id
+          WHERE a.usuario_id = :userId
+          GROUP BY f.genero
+          ORDER BY media DESC`, { userId }
+      );
+
+      if (prefs && prefs.length) {
+        const topGenres = new Set(prefs.filter(p => p.media >= 4).map(p => p.genero).filter(Boolean));
+        if (topGenres.size) {
+          // empurra itens desses gêneros pro topo mantendo ordem relativa
+          rows = [
+            ...rows.filter(r => topGenres.has(r.genero)),
+            ...rows.filter(r => !topGenres.has(r.genero)),
+          ];
+        }
+      }
     }
 
-    if (recs.length === 0) {
-      // 3) fallback populares (sem "NULLS LAST" no MySQL)
-      // truque: ordenar por (media IS NULL) ASC pra empurrar NULL pro fim
-      const [rows] = await db.query(`
-        SELECT f.*, AVG(a.nota) AS media, COUNT(a.id) AS qtd
-        FROM filmes f
-        LEFT JOIN avaliacoes a ON a.filme_id = f.id
-        GROUP BY f.id
-        ORDER BY (AVG(a.nota) IS NULL) ASC, media DESC, qtd DESC, f.criado_em DESC
-        LIMIT 20
-      `);
-      recs = rows;
-    }
-
-    return res.json({ genres: favGenres, recommendations: recs });
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({ error: 'Erro ao gerar recomendações' });
-  }
+    res.json(rows || []);
+  } catch (e) { next(e); }
 });
 
 module.exports = router;

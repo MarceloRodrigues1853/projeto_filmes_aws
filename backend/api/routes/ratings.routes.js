@@ -1,95 +1,48 @@
-// /api/routes/ratings.routes.js
 const express = require('express');
-const path = require('path');
-const db = require(path.join(__dirname, '..', 'services', 'db.service.js'));
-const { authRequired } = require(path.join(__dirname, '..', 'services', 'auth.middleware.js'));
+const jwt = require('jsonwebtoken');
+const { pool } = require('../services/db.service');
 
 const router = express.Router();
 
-/**
- * POST /api/ratings
- * body: { filmeId: number, nota: 1..5 }
- * cria OU atualiza a nota do usuário para o filme
- */
-router.post('/', authRequired, async (req, res) => {
+function getUserIdFromAuth(req) {
+  const auth = req.headers.authorization || '';
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  if (!m) return null;
   try {
-    const { filmeId, nota } = req.body;
-    if (!filmeId || !Number.isInteger(nota) || nota < 1 || nota > 5) {
-      return res.status(400).json({ error: 'Parâmetros inválidos' });
-    }
-    const userId = req.user.id;
-
-    // upsert simples
-    const [exists] = await db.query(
-      'SELECT id FROM avaliacoes WHERE usuario_id=? AND filme_id=?',
-      [userId, filmeId]
-    );
-    if (exists[0]) {
-      await db.query('UPDATE avaliacoes SET nota=?, criado_em=NOW() WHERE id=?', [nota, exists[0].id]);
-    } else {
-      await db.query('INSERT INTO avaliacoes (usuario_id, filme_id, nota) VALUES (?,?,?)',
-        [userId, filmeId, nota]);
-    }
-    return res.json({ ok: true });
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({ error: 'Erro ao registrar avaliação' });
+    const secret = process.env.JWT_SECRET || 'dev-secret';
+    const payload = jwt.verify(m[1], secret);
+    return payload?.sub || null;
+  } catch {
+    return null;
   }
-});
+}
 
 /**
- * GET /api/ratings/:filmeId
- * retorna a nota do usuário logado para um filme (se existir)
+ * PUT /api/ratings/:filmeId
+ * body: { nota }   (1..5)
+ * requer Bearer token
  */
-router.get('/:filmeId', authRequired, async (req, res) => {
+router.put('/:filmeId', async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const filmeId = Number(req.params.filmeId);
-    const [rows] = await db.query(
-      'SELECT nota FROM avaliacoes WHERE usuario_id=? AND filme_id=?',
-      [userId, filmeId]
-    );
-    return res.json({ nota: rows[0]?.nota ?? null });
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({ error: 'Erro ao buscar avaliação' });
-  }
-});
+    const usuario_id = getUserIdFromAuth(req);
+    if (!usuario_id) return res.status(401).json({ error: 'unauthorized' });
 
-// PUT /api/ratings/:filmeId  -> body: { nota: 1..5 }  (cria/atualiza)
-router.put('/:filmeId', authRequired, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const filmeId = Number(req.params.filmeId);
-    const { nota } = req.body;
-
-    if (!Number.isInteger(filmeId) || !Number.isInteger(nota) || nota < 1 || nota > 5) {
-      return res.status(400).json({ error: 'Parâmetros inválidos' });
+    const filme_id = parseInt(req.params.filmeId, 10);
+    const nota = parseInt(req.body?.nota, 10);
+    if (!filme_id || !(nota >= 1 && nota <= 5)) {
+      return res.status(400).json({ error: 'filmeId inválido ou nota fora de 1..5' });
     }
 
-    // valida se o filme existe
-    const [f] = await db.query('SELECT id FROM filmes WHERE id=?', [filmeId]);
-    if (!f[0]) return res.status(404).json({ error: 'Filme não encontrado' });
-
-    // upsert
-    const [exists] = await db.query(
-      'SELECT id FROM avaliacoes WHERE usuario_id=? AND filme_id=?',
-      [userId, filmeId]
+    // upsert na PK composta (usuario_id, filme_id)
+    await pool.query(
+      `INSERT INTO avaliacoes (usuario_id, filme_id, nota, criado_em)
+       VALUES (:usuario_id, :filme_id, :nota, NOW())
+       ON DUPLICATE KEY UPDATE nota = VALUES(nota), criado_em = NOW()`,
+      { usuario_id, filme_id, nota }
     );
 
-    if (exists[0]) {
-      await db.query('UPDATE avaliacoes SET nota=?, criado_em=NOW() WHERE id=?', [nota, exists[0].id]);
-      return res.json({ ok: true, updated: true });
-    } else {
-      await db.query('INSERT INTO avaliacoes (usuario_id, filme_id, nota) VALUES (?,?,?)',
-        [userId, filmeId, nota]);
-      return res.status(201).json({ ok: true, created: true });
-    }
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({ error: 'Erro ao salvar avaliação' });
-  }
+    res.json({ ok: true, usuario_id, filme_id, nota });
+  } catch (e) { next(e); }
 });
-
 
 module.exports = router;
