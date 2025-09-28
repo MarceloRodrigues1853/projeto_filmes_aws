@@ -1,4 +1,4 @@
-// /api/services/db.service.js
+// backend/api/services/db.service.js
 const mysql = require('mysql2/promise');
 
 const pool = mysql.createPool({
@@ -9,10 +9,12 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME,
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  namedPlaceholders: true,
 });
 
-module.exports = {
-  query: (sql, params) => pool.query(sql, params),
-  pool
-};
+async function query(sql, params = {}) {
+  const [rows] = await pool.query(sql, params);
+  return rows;
+}
+
+module.exports = { pool, query };

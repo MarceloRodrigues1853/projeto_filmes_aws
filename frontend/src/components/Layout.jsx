@@ -4,9 +4,7 @@ import { initTheme } from "../theme";
 export default function Layout({ children }) {
   const [theme, setTheme] = useState("light");
 
-  useEffect(() => {
-    setTheme(initTheme());
-  }, []);
+  useEffect(() => { setTheme(initTheme()); }, []);
 
   return (
     <div

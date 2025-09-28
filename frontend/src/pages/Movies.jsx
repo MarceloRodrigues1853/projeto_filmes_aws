@@ -1,9 +1,16 @@
-// src/pages/Movies.jsx
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 
 const PAGE_SIZE = 8;
+
+/* ---------- helpers de normalização (aceita PT/EN) ---------- */
+const normId      = (m) => m.id ?? m.ID ?? m.movie_id ?? m.film_id;
+const normTitle   = (m) => m.titulo ?? m.title ?? '';
+const normGenre   = (m) => m.genero ?? m.genre ?? '';
+const normDirector= (m) => m.diretor ?? m.director ?? '';
+const normPoster  = (m) => m.imagem_s3_url ?? m.poster ?? m.capa ?? '';
+const normCreated = (m) => m.criado_em ?? m.created_at ?? m.createdAt ?? 0;
 
 export default function Movies() {
   const [list, setList] = useState([]);
@@ -20,13 +27,14 @@ export default function Movies() {
   const [sort, setSort] = useState('recent'); // recent|title|genre
   const [page, setPage] = useState(1);
 
-  const fetchMovies = async () => {
+  const fetchMovies = async (signal) => {
     try {
       setLoading(true);
       setErr('');
-      const { data } = await api.get('/movies'); // <- sem /api
-      setList(data || []);
+      const { data } = await api.get('/movies', { signal }); // base já é /api
+      setList(Array.isArray(data) ? data : []);
     } catch (error) {
+      if (error.name === 'CanceledError' || error.name === 'AbortError') return;
       setErr('Falha ao carregar filmes.');
       console.error(error);
     } finally {
@@ -34,34 +42,44 @@ export default function Movies() {
     }
   };
 
-  useEffect(() => { fetchMovies(); }, []);
+  useEffect(() => {
+    const ctrl = new AbortController();
+    fetchMovies(ctrl.signal);
+    return () => ctrl.abort();
+  }, []);
 
   const genres = useMemo(() => {
     const s = new Set();
-    list.forEach(m => m.genero && s.add(m.genero));
+    list.forEach(m => {
+      const g = normGenre(m);
+      if (g) s.add(g);
+    });
     return ['Todos', ...Array.from(s)];
   }, [list]);
 
   const filtered = useMemo(() => {
     let out = [...list];
+
     if (q.trim()) {
       const qq = q.toLowerCase();
       out = out.filter(m =>
-        m.titulo?.toLowerCase().includes(qq) ||
-        m.diretor?.toLowerCase().includes(qq) ||
-        m.genero?.toLowerCase().includes(qq)
+        normTitle(m).toLowerCase().includes(qq) ||
+        normDirector(m).toLowerCase().includes(qq) ||
+        normGenre(m).toLowerCase().includes(qq)
       );
     }
+
     if (genreFilter && genreFilter !== 'Todos') {
-      out = out.filter(m => m.genero === genreFilter);
+      out = out.filter(m => normGenre(m) === genreFilter);
     }
+
     if (sort === 'title') {
-      out.sort((a,b)=> a.titulo.localeCompare(b.titulo));
+      out.sort((a,b)=> normTitle(a).localeCompare(normTitle(b)));
     } else if (sort === 'genre') {
-      out.sort((a,b)=> (a.genero||'').localeCompare(b.genero||''));
+      out.sort((a,b)=> normGenre(a).localeCompare(normGenre(b)));
     } else {
-      // recent: por criado_em desc (ou id desc)
-      out.sort((a,b)=> new Date(b.criado_em||0) - new Date(a.criado_em||0) || b.id - a.id);
+      // recent: criado_em desc (ou id desc como fallback)
+      out.sort((a,b)=> new Date(normCreated(b)) - new Date(normCreated(a)) || (normId(b) - normId(a)));
     }
     return out;
   }, [list, q, genreFilter, sort]);
@@ -75,14 +93,15 @@ export default function Movies() {
   useEffect(()=>{ setPage(1); }, [q, genreFilter, sort]);
 
   const handleFile = (f) => {
-    setFile(f);
-    if (f) {
-      const url = URL.createObjectURL(f);
-      setPreview(url);
-    } else {
-      setPreview('');
-    }
+    // limpa preview anterior
+    if (preview) URL.revokeObjectURL(preview);
+    setFile(f || null);
+    setPreview(f ? URL.createObjectURL(f) : '');
   };
+
+  useEffect(() => {
+    return () => { if (preview) URL.revokeObjectURL(preview); };
+  }, [preview]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -91,16 +110,22 @@ export default function Movies() {
     if (!file) return alert("Selecione uma imagem de capa.");
 
     const formData = new FormData();
+    // nomes PT (teu back)
     formData.append('titulo', form.titulo);
     formData.append('genero', form.genero);
     formData.append('diretor', form.diretor);
     formData.append('imagem', file);
+    // nomes EN (fallback, caso teu back aceite)
+    formData.append('title', form.titulo);
+    formData.append('genre', form.genero);
+    formData.append('director', form.diretor);
+    formData.append('poster', file);
 
     try {
       await api.post('/movies', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       setForm({ titulo: '', genero: '', diretor: '' });
       handleFile(null);
-      e.target.reset();
+      e.target.reset?.();
       await fetchMovies();
       toast('Filme adicionado com sucesso! ✅');
     } catch (error) {
@@ -114,7 +139,7 @@ export default function Movies() {
     if (!confirm('Tem certeza que deseja excluir este filme?')) return;
     try {
       await api.delete(`/movies/${id}`);
-      setList((prev)=> prev.filter(x=> x.id !== id));
+      setList((prev)=> prev.filter(x=> normId(x) !== id));
       toast('Filme excluído. 🗑️');
     } catch (e) {
       console.error(e);
@@ -133,20 +158,28 @@ export default function Movies() {
           <div>
             <label className="block text-sm font-medium">Título</label>
             <input className="mt-1 w-full border rounded-lg px-3 py-2"
-              value={form.titulo} onChange={e => setForm({ ...form, titulo: e.target.value })} required disabled={!token} />
+              value={form.titulo}
+              onChange={e => setForm({ ...form, titulo: e.target.value })}
+              required disabled={!token} />
           </div>
           <div>
             <label className="block text-sm font-medium">Gênero</label>
             <input className="mt-1 w-full border rounded-lg px-3 py-2"
-              value={form.genero} onChange={e => setForm({ ...form, genero: e.target.value })} placeholder="Ação, Ficção..." disabled={!token} />
+              value={form.genero}
+              onChange={e => setForm({ ...form, genero: e.target.value })}
+              placeholder="Ação, Ficção..." disabled={!token} />
           </div>
           <div>
             <label className="block text-sm font-medium">Diretor</label>
             <input className="mt-1 w-full border rounded-lg px-3 py-2"
-              value={form.diretor} onChange={e => setForm({ ...form, diretor: e.target.value })} disabled={!token} />
+              value={form.diretor}
+              onChange={e => setForm({ ...form, diretor: e.target.value })}
+              disabled={!token} />
           </div>
           <div className="md:col-span-4 flex items-center gap-3 flex-wrap">
-            <input type="file" accept="image/*" onChange={e => handleFile(e.target.files?.[0] || null)} disabled={!token} required />
+            <input type="file" accept="image/*"
+              onChange={e => handleFile(e.target.files?.[0] || null)}
+              disabled={!token} required />
             {preview && (
               <div className="flex items-center gap-2">
                 <img alt="preview" src={preview} className="h-16 w-12 object-cover rounded" />
@@ -197,26 +230,33 @@ export default function Movies() {
       ) : (
         <>
           <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {pageItems.map(m => (
-              <div key={m.id} className="card overflow-hidden group">
-                <Link to={`/movie/${m.id}`} className="block">
-                  <div className="aspect-[2/3] bg-zinc-200 rounded-xl overflow-hidden mb-3">
-                    {m.imagem_s3_url
-                      ? <img src={m.imagem_s3_url} alt={m.titulo} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
-                      : <div className="w-full h-full grid place-items-center text-zinc-500">Sem capa</div>}
-                  </div>
-                  <div className="font-medium">{m.titulo}</div>
-                  <div className="text-sm text-zinc-600">
-                    {m.genero} {m.diretor && <>• {m.diretor}</>}
-                  </div>
-                </Link>
-                {token && (
-                  <div className="mt-3">
-                    <button className="btn-outline w-full" onClick={()=>onDelete(m.id)}>Excluir</button>
-                  </div>
-                )}
-              </div>
-            ))}
+            {pageItems.map(m => {
+              const id = normId(m);
+              const titulo = normTitle(m);
+              const genero = normGenre(m);
+              const diretor = normDirector(m);
+              const img = normPoster(m);
+              return (
+                <div key={id} className="card overflow-hidden group">
+                  <Link to={`/movie/${id}`} className="block">
+                    <div className="aspect-[2/3] bg-zinc-200 rounded-xl overflow-hidden mb-3">
+                      {img
+                        ? <img src={img} alt={titulo} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
+                        : <div className="w-full h-full grid place-items-center text-zinc-500">Sem capa</div>}
+                    </div>
+                    <div className="font-medium">{titulo}</div>
+                    <div className="text-sm text-zinc-600">
+                      {genero} {diretor && <>• {diretor}</>}
+                    </div>
+                  </Link>
+                  {token && (
+                    <div className="mt-3">
+                      <button className="btn-outline w-full" onClick={()=>onDelete(id)}>Excluir</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           {/* Paginação */}
