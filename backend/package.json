@@ -2,10 +2,10 @@
   "name": "projeto_filmes_aws",
   "version": "1.0.0",
   "description": "API backend do sistema de filmes com integração AWS (RDS + S3)",
-  "main": "index.js",
+  "main": "api/server.js",
   "scripts": {
-    "dev": "nodemon --legacy-watch index.js",
-    "start": "node index.js",
+    "dev": "nodemon --legacy-watch api/server.js",
+    "start": "node api/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

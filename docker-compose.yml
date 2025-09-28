@@ -7,11 +7,13 @@ services:
     env_file:
       - ./backend/.env
     ports:
+      # Expõe a porta 8080 do contêiner para a porta 8080 da sua máquina
       - "8080:8080"
     volumes:
       - ./backend:/app
       - /app/node_modules
-    command: sh -c "npm install && npm run dev"
+    # O comando agora só inicia o servidor de desenvolvimento.
+    command: npm run dev
     networks:
       - appnet
 
@@ -21,14 +23,17 @@ services:
       dockerfile: Dockerfile
     container_name: projeto-filmes-frontend
     environment:
+      # CORREÇÃO: O navegador acessa a API via localhost.
       VITE_API_URL: http://localhost:8080/api
     depends_on:
       - backend
     ports:
+      # Expõe a porta 5173 do contêiner para a porta 5173 da sua máquina
       - "5173:5173"
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    # O --host é crucial para que o Vite seja acessível de fora do contêiner
     command: npm run dev -- --host
     networks:
       - appnet
@@ -36,3 +41,4 @@ services:
 networks:
   appnet:
     driver: bridge
+

@@ -2,8 +2,7 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const path = require('path');
-const db = require(path.join(__dirname, '..', 'services', 'db.service.js'));
+const db = require('../services/db.service');
 
 const router = express.Router();
 

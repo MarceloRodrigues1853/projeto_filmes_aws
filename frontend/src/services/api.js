@@ -31,3 +31,4 @@ export default api;
 Dica: aqui a base já é .../api.
 Nos componentes use caminhos como '/movies', '/auth/login', '/recommendations', etc.
 */
+

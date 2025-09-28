@@ -5,6 +5,7 @@ import App from './pages/App'
 import Login from './pages/Login'
 import Movies from './pages/Movies'
 import Recs from './pages/Recs'
+import Register from './pages/Register'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -13,6 +14,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <Routes>
         <Route path="/" element={<App />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
         <Route path="/movies" element={<Movies />} />
         <Route path="/recs" element={<Recs />} />
       </Routes>
