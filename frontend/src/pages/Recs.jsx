@@ -1,63 +1,87 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../services/api";
 
+/* helpers de normalização (aceita PT/EN e números como string) */
+const n = {
+  id: (m) => m?.id ?? m?.movie_id ?? m?.ID,
+  title: (m) => m?.titulo ?? m?.title ?? "",
+  genre: (m) => m?.genero ?? m?.genre ?? "",
+  director: (m) => m?.diretor ?? m?.director ?? "",
+  poster: (m) => m?.imagem_s3_url ?? m?.poster ?? m?.capa ?? "",
+  avg: (m) => {
+    const v = m?.media_nota ?? m?.avg ?? m?.media ?? 0;
+    const num = typeof v === "number" ? v : Number(v);
+    return Number.isFinite(num) ? num : 0;
+  },
+  count: (m) => {
+    const v = m?.qtd_avaliacoes ?? m?.count ?? m?.total ?? 0;
+    const num = typeof v === "number" ? v : Number(v);
+    return Number.isFinite(num) ? num : 0;
+  },
+};
+
 export default function Recs() {
-  const [data, setData] = useState({ genres: [], recommendations: [] });
+  const [items, setItems] = useState([]);      // <- começa como array vazio
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const token = localStorage.getItem("token");
 
-  useEffect(() => {
-    // se não tiver token, não chama a API
-    if (!token) {
+  // pega userId do localStorage (se logado)
+  const rawUser = localStorage.getItem("user");
+  const userId = (() => {
+    try { return rawUser ? JSON.parse(rawUser)?.id ?? null : null; }
+    catch { return null; }
+  })();
+
+  async function load(signal) {
+    try {
+      setLoading(true);
+      setErr("");
+      const params = { limit: 12 };
+      if (userId) params.userId = userId;
+
+      const { data } = await api.get("/recommendations", { params, signal });
+      setItems(Array.isArray(data) ? data : []);  // <- garante array
+    } catch (e) {
+      if (e.name === "CanceledError" || e.name === "AbortError") return;
+      console.error(e);
+      setErr("Falha ao carregar recomendações.");
+      setItems([]);                                // <- nunca deixa indefinido
+    } finally {
       setLoading(false);
-      return;
     }
-    (async () => {
-      try {
-        setLoading(true);
-        setErr("");
-        const { data } = await api.get("/recommendations");
-        setData(data || { genres: [], recommendations: [] });
-      } catch (error) {
-        // 401 → estado amigável ao invés de “Falha…”
-        if (error?.response?.status === 401) {
-          setErr("auth"); // flag especial
-        } else {
-          setErr("generic");
-        }
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [token]);
-
-  // estado “não logado”
-  if (!token) {
-    return (
-      <div className="card">
-        <h2 className="text-lg font-semibold mb-2">Recomendações</h2>
-        <p className="text-zinc-600 mb-3">Entre para ver suas recomendações personalizadas.</p>
-        <div className="flex gap-2">
-          <Link to="/login" className="btn">Entrar</Link>
-          <Link to="/register" className="btn-outline">Criar conta</Link>
-        </div>
-      </div>
-    );
   }
 
-  // loading
-  if (loading) {
-    return (
-      <div className="grid gap-6">
-        <div className="card">
-          <div className="flex gap-2">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <span key={i} className="px-10 py-3 rounded-full bg-zinc-200 animate-pulse" />
-            ))}
-          </div>
-        </div>
+  useEffect(() => {
+    const ctrl = new AbortController();
+    load(ctrl.signal);
+    return () => ctrl.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
+  const list = useMemo(
+    () => (Array.isArray(items) ? items : []).map((m) => ({
+      id: n.id(m),
+      titulo: n.title(m),
+      genero: n.genre(m),
+      diretor: n.director(m),
+      poster: n.poster(m),
+      media: n.avg(m),
+      qtd: n.count(m),
+    })),
+    [items]
+  );
+
+  return (
+    <div className="grid gap-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Recomendações</h1>
+        <button className="btn-outline" onClick={() => load()}>
+          Recarregar
+        </button>
+      </div>
+
+      {loading ? (
         <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="card animate-pulse">
@@ -67,63 +91,80 @@ export default function Recs() {
             </div>
           ))}
         </div>
-      </div>
-    );
-  }
-
-  // erro 401 (token inválido/expirado)
-  if (err === "auth") {
-    return (
-      <div className="card">
-        <h2 className="text-lg font-semibold mb-2">Sessão expirada</h2>
-        <p className="text-zinc-600 mb-3">Faça login novamente para ver suas recomendações.</p>
-        <Link to="/login" className="btn">Entrar</Link>
-      </div>
-    );
-  }
-
-  // erro genérico
-  if (err === "generic") {
-    return <div className="card bg-red-50 text-red-700">Não foi possível carregar recomendações.</div>;
-  }
-
-  // ok
-  return (
-    <div className="grid gap-6">
-      <div className="card">
-        <h2 className="text-lg font-semibold mb-2">Seus gêneros preferidos</h2>
-        <div className="flex flex-wrap gap-2">
-          {data.genres.length === 0
-            ? <div className="text-sm text-zinc-600">Avalie filmes para ver seus gêneros preferidos.</div>
-            : data.genres.map((g, i) => (
-                <span key={i} className="px-3 py-1 rounded-full bg-zinc-200 text-sm">
-                  {g.genero} ({Number(g.media).toFixed(1)})
-                </span>
-              ))
-          }
-        </div>
-      </div>
-
-      <h2 className="text-xl font-semibold mt-2">Recomendações para você</h2>
-      {data.recommendations.length === 0 ? (
-        <div className="card text-zinc-600">Sem recomendações por enquanto. Avalie mais filmes!</div>
+      ) : err ? (
+        <div className="card bg-red-50 text-red-700">{err}</div>
+      ) : list.length === 0 ? (
+        /* <- nunca quebra: list é array */
+        (
+          <div className="card text-zinc-600">
+            Nada por aqui ainda. Adicione notas em alguns filmes e recarregue a página.
+          </div>
+        )
       ) : (
         <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {data.recommendations.map((m) => (
-            <div key={m.id} className="card">
-              <div className="aspect-[2/3] bg-zinc-200 rounded-xl overflow-hidden mb-3">
-                {m.imagem_s3_url
-                  ? <img src={m.imagem_s3_url} alt={m.titulo} className="w-full h-full object-cover" />
-                  : <div className="w-full h-full grid place-items-center text-zinc-500">Sem capa</div>}
-              </div>
-              <div className="font-medium">{m.titulo}</div>
-              <div className="text-sm text-zinc-600">
-                {m.genero} {m.diretor && <>• {m.diretor}</>}
-              </div>
+          {list.map((m) => (
+            <div key={m.id} className="card overflow-hidden group">
+              <Link to={`/movie/${m.id}`} className="block">
+                <div className="aspect-[2/3] bg-zinc-200 rounded-xl overflow-hidden mb-3">
+                  {m.poster ? (
+                    <img
+                      src={m.poster}
+                      alt={m.titulo}
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                    />
+                  ) : (
+                    <div className="w-full h-full grid place-items-center text-zinc-500">
+                      Sem capa
+                    </div>
+                  )}
+                </div>
+
+                <div className="font-medium">{m.titulo}</div>
+                <div className="text-sm text-zinc-600">
+                  {m.genero} {m.diretor && <>• {m.diretor}</>}
+                </div>
+
+                <div className="mt-2 flex items-center gap-2 text-sm">
+                  <AvgStars value={m.media} />
+                  <span className="text-zinc-600">
+                    {Number.isFinite(m.media) ? m.media.toFixed(1) : "-"} ({m.qtd})
+                  </span>
+                </div>
+              </Link>
             </div>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* estrelas médias (visual, sem clique) */
+function AvgStars({ value = 0, size = 18 }) {
+  const v = Number.isFinite(value) ? value : 0;
+  const pct = Math.max(0, Math.min(100, (v / 5) * 100));
+  const baseStyle = {
+    fontSize: `${size}px`,
+    lineHeight: 1,
+    letterSpacing: "2px",
+  };
+  return (
+    <div style={{ position: "relative", display: "inline-block" }} aria-label={`média ${v.toFixed(1)} de 5`}>
+      <div style={{ ...baseStyle, color: "#d1d5db" }}>★★★★★</div>
+      <div
+        style={{
+          ...baseStyle,
+          color: "#f59e0b",
+          position: "absolute",
+          inset: 0,
+          width: `${pct}%`,
+          overflow: "hidden",
+          whiteSpace: "nowrap",
+          pointerEvents: "none",
+        }}
+      >
+        ★★★★★
+      </div>
     </div>
   );
 }

@@ -9,7 +9,11 @@ const router = express.Router();
 function normalizeEmail(v) {
   return String(v || '').trim().toLowerCase();
 }
-
+function getPassword(body) {
+  // aceita password, senha, pass
+  const raw = body?.password ?? body?.senha ?? body?.pass ?? '';
+  return String(raw);
+}
 function signToken(payload) {
   const secret = process.env.JWT_SECRET || 'dev-secret';
   return jwt.sign(payload, secret, { expiresIn: '7d' });
@@ -17,19 +21,18 @@ function signToken(payload) {
 
 /**
  * POST /api/auth/register
- * body: { nome, email, password }
+ * body (JSON ou form): { nome, email, password|senha }
  */
 router.post('/register', async (req, res, next) => {
   try {
     const nome = String(req.body?.nome || '').trim();
     const email = normalizeEmail(req.body?.email);
-    const password = String(req.body?.password || '');
+    const password = getPassword(req.body);
 
     if (!nome || !email || !password) {
-      return res.status(400).json({ error: 'nome, email e password são obrigatórios' });
+      return res.status(400).json({ error: 'nome, email e password/senha são obrigatórios' });
     }
 
-    // email único
     const exists = await query('SELECT id FROM usuarios WHERE email = :email', { email });
     if (exists.length) {
       return res.status(409).json({ error: 'E-mail já cadastrado' });
@@ -50,18 +53,18 @@ router.post('/register', async (req, res, next) => {
 
 /**
  * POST /api/auth/login
- * body: { email, password }
+ * body (JSON ou form): { email, password|senha }
  */
 router.post('/login', async (req, res, next) => {
   try {
     const email = normalizeEmail(req.body?.email);
-    const password = String(req.body?.password || '');
+    const password = getPassword(req.body);
 
     if (!email || !password) {
-      return res.status(400).json({ error: 'email e password são obrigatórios' });
+      return res.status(400).json({ error: 'email e password/senha são obrigatórios' });
     }
 
-    // db.service.query retorna ARRAY
+    // db.service.query retorna ARRAY de linhas
     const rows = await query(
       'SELECT id, nome, email, senha_hash FROM usuarios WHERE email = :email',
       { email }

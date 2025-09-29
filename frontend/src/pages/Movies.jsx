@@ -4,13 +4,13 @@ import api from '../services/api';
 
 const PAGE_SIZE = 8;
 
-/* ---------- helpers de normalização (aceita PT/EN) ---------- */
-const normId      = (m) => m.id ?? m.ID ?? m.movie_id ?? m.film_id;
-const normTitle   = (m) => m.titulo ?? m.title ?? '';
-const normGenre   = (m) => m.genero ?? m.genre ?? '';
-const normDirector= (m) => m.diretor ?? m.director ?? '';
-const normPoster  = (m) => m.imagem_s3_url ?? m.poster ?? m.capa ?? '';
-const normCreated = (m) => m.criado_em ?? m.created_at ?? m.createdAt ?? 0;
+/* helpers de normalização (aceita PT/EN) */
+const normId       = (m) => m.id ?? m.ID ?? m.movie_id ?? m.film_id;
+const normTitle    = (m) => m.titulo ?? m.title ?? '';
+const normGenre    = (m) => m.genero ?? m.genre ?? '';
+const normDirector = (m) => m.diretor ?? m.director ?? '';
+const normPoster   = (m) => m.imagem_s3_url ?? m.poster ?? m.capa ?? '';
+const normCreated  = (m) => m.criado_em ?? m.created_at ?? m.createdAt ?? 0;
 
 export default function Movies() {
   const [list, setList] = useState([]);
@@ -78,7 +78,6 @@ export default function Movies() {
     } else if (sort === 'genre') {
       out.sort((a,b)=> normGenre(a).localeCompare(normGenre(b)));
     } else {
-      // recent: criado_em desc (ou id desc como fallback)
       out.sort((a,b)=> new Date(normCreated(b)) - new Date(normCreated(a)) || (normId(b) - normId(a)));
     }
     return out;
@@ -93,7 +92,6 @@ export default function Movies() {
   useEffect(()=>{ setPage(1); }, [q, genreFilter, sort]);
 
   const handleFile = (f) => {
-    // limpa preview anterior
     if (preview) URL.revokeObjectURL(preview);
     setFile(f || null);
     setPreview(f ? URL.createObjectURL(f) : '');
@@ -105,17 +103,17 @@ export default function Movies() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!token) return alert("Entre para adicionar.");
+    if (!token) return;
     if (!form.titulo.trim()) return alert("Informe o título.");
     if (!file) return alert("Selecione uma imagem de capa.");
 
     const formData = new FormData();
-    // nomes PT (teu back)
+    // nomes PT
     formData.append('titulo', form.titulo);
     formData.append('genero', form.genero);
     formData.append('diretor', form.diretor);
     formData.append('imagem', file);
-    // nomes EN (fallback, caso teu back aceite)
+    // fallback EN
     formData.append('title', form.titulo);
     formData.append('genre', form.genero);
     formData.append('director', form.diretor);
@@ -135,7 +133,7 @@ export default function Movies() {
   };
 
   const onDelete = async (id) => {
-    if (!token) return alert("Entre para excluir.");
+    if (!token) return;
     if (!confirm('Tem certeza que deseja excluir este filme?')) return;
     try {
       await api.delete(`/movies/${id}`);
@@ -152,41 +150,67 @@ export default function Movies() {
       {/* Formulário */}
       <div className="card">
         <h2 className="text-lg font-semibold mb-3">Adicionar Filme</h2>
-        {!token && <p className="text-sm text-zinc-600 mb-2">Faça login para adicionar filmes.</p>}
+
+        {!token && (
+          <p className="text-sm text-zinc-600 mb-2">
+            Faça <Link to="/login" className="underline">login</Link> para adicionar filmes.
+          </p>
+        )}
 
         <form onSubmit={handleSubmit} className="grid md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="block text-sm font-medium">Título</label>
-            <input className="mt-1 w-full border rounded-lg px-3 py-2"
+            <input
+              className="mt-1 w-full border rounded-lg px-3 py-2"
               value={form.titulo}
               onChange={e => setForm({ ...form, titulo: e.target.value })}
-              required disabled={!token} />
+              required
+              disabled={!token}
+            />
           </div>
           <div>
             <label className="block text-sm font-medium">Gênero</label>
-            <input className="mt-1 w-full border rounded-lg px-3 py-2"
+            <input
+              className="mt-1 w-full border rounded-lg px-3 py-2"
               value={form.genero}
               onChange={e => setForm({ ...form, genero: e.target.value })}
-              placeholder="Ação, Ficção..." disabled={!token} />
+              placeholder="Ação, Ficção..."
+              disabled={!token}
+            />
           </div>
           <div>
             <label className="block text-sm font-medium">Diretor</label>
-            <input className="mt-1 w-full border rounded-lg px-3 py-2"
+            <input
+              className="mt-1 w-full border rounded-lg px-3 py-2"
               value={form.diretor}
               onChange={e => setForm({ ...form, diretor: e.target.value })}
-              disabled={!token} />
+              disabled={!token}
+            />
           </div>
           <div className="md:col-span-4 flex items-center gap-3 flex-wrap">
-            <input type="file" accept="image/*"
+            <input
+              type="file"
+              accept="image/*"
               onChange={e => handleFile(e.target.files?.[0] || null)}
-              disabled={!token} required />
+              disabled={!token}
+              required={!!token}
+            />
             {preview && (
               <div className="flex items-center gap-2">
                 <img alt="preview" src={preview} className="h-16 w-12 object-cover rounded" />
-                <button type="button" className="btn-outline" onClick={()=>handleFile(null)}>Remover imagem</button>
+                <button type="button" className="btn-outline" onClick={()=>handleFile(null)}>
+                  Remover imagem
+                </button>
               </div>
             )}
-            <button className="btn ml-auto" type="submit" disabled={!token}>Salvar</button>
+
+            <div className="ml-auto">
+              {token ? (
+                <button className="btn" type="submit">Salvar</button>
+              ) : (
+                <Link className="btn-outline" to="/login">Entrar para adicionar</Link>
+              )}
+            </div>
           </div>
         </form>
       </div>
