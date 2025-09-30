@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
+// Componente principal da página Home (sem alterações)
 export default function Home() {
   return (
     <main>
@@ -38,40 +39,36 @@ export default function Home() {
   );
 }
 
-function normalizeBase(v) {
-  return (v || "http://127.0.0.1:8080/api").replace(/\/+$/, "");
-}
+// *** COMPONENTE CORRIGIDO E SIMPLIFICADO ***
 function ApiPill() {
   const [ok, setOk] = useState(null);
 
   const checkApi = async () => {
-    setOk(null);
-    const BASE = normalizeBase(import.meta.env.VITE_API_URL);
-    const baseNoApi = BASE.replace(/\/api$/, '');
-    const candidates = [
-      `${BASE}/health`,
-      `${baseNoApi}/health`,
-      `http://127.0.0.1:8080/api/health`,
-      `http://127.0.0.1:8080/health`,
-    ];
-    const ping = async (url, ms = 3000) => {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), ms);
-      try { const r = await fetch(url, { cache: "no-store", signal: ctrl.signal }); return r.ok; }
-      catch { return false; }
-      finally { clearTimeout(t); }
-    };
-    for (const url of candidates) if (await ping(url)) return setOk(true);
-    setOk(false);
+    setOk(null); // Define o status como "checando..."
+
+    // URL correta para o health check em produção.
+    // O navegador vai chamar http://18.229.123.154/api/health
+    const healthCheckUrl = '/api/health';
+
+    try {
+      // Usa um timeout para não esperar para sempre
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 segundos
+
+      const response = await fetch(healthCheckUrl, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      // Se a resposta for OK (status 200-299), a API está online
+      setOk(response.ok);
+    } catch (error) {
+      // Se der qualquer erro (timeout, falha de rede), a API está offline
+      console.error("API health check failed:", error);
+      setOk(false);
+    }
   };
 
   useEffect(() => {
     checkApi();
-    const on = () => checkApi();
-    const off = () => setOk(false);
-    window.addEventListener("online", on);
-    window.addEventListener("offline", off);
-    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
   }, []);
 
   return (
@@ -81,13 +78,15 @@ function ApiPill() {
     }}>
       <span style={{
         width: 10, height: 10, borderRadius: 9999,
-        background: ok ? "#16a34a" : ok === null ? "#ca8a04" : "#dc2626",
+        background: ok === true ? "#16a34a" : ok === null ? "#ca8a04" : "#dc2626", // Verde, Amarelo, Vermelho
         display: "inline-block",
       }}/>
       <span style={{ fontSize: ".875rem", color: "rgba(24,24,27,.75)" }}>
-        API: {ok ? "online" : ok === null ? "checando..." : "offline"}
+        API: {ok === true ? "online" : ok === null ? "checando..." : "offline"}
       </span>
-      <button className="btn-outline" style={{ marginLeft: 8, padding: "4px 8px" }} onClick={checkApi}>Rechecar</button>
+      <button className="btn-outline" style={{ marginLeft: 8, padding: "4px 8px" }} onClick={checkApi} disabled={ok === null}>
+        Rechecar
+      </button>
     </div>
   );
 }
