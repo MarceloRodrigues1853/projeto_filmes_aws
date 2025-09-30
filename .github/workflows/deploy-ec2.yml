@@ -1,35 +1,49 @@
-script: |
-        cd /opt/filmes
+on:
+  push:
+    branches:
+      - main
 
-        cat <<EOF > docker-compose.prod.yml
-        version: '3.8'
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
 
-        services:
-          backend:
-            image: ${{ secrets.DOCK-ERHUB_USERNAME }}/projeto-filmes-backend:latest
-            restart: always
-            env_file:
-              - backend.env
-            networks:
-              - app-network
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-          frontend:
-            image: ${{ secrets.DOCKERHUB_USERNAME }}/projeto-filmes-frontend:latest
-            restart: always
-            ports:
-              - "80:80"
-              - "443:443"
-            volumes:
-              - /etc/letsencrypt:/etc/letsencrypt:ro
-            depends_on:
-              - backend
-            networks:
-              - app-network
+      - name: Deploy to EC2
+        run: |
+          cd /opt/filmes
 
-        networks:
-          app-network:
-            driver: bridge
-        EOF
+          cat <<EOF > docker-compose.prod.yml
+          version: '3.8'
 
-        docker compose -f docker-compose.prod.yml pull
-        docker compose -f docker-compose.prod.yml up -d
+          services:
+            backend:
+              image: ${{ secrets.DOCKERHUB_USERNAME }}/projeto-filmes-backend:latest
+              restart: always
+              env_file:
+                - backend.env
+              networks:
+                - app-network
+
+            frontend:
+              image: ${{ secrets.DOCKERHUB_USERNAME }}/projeto-filmes-frontend:latest
+              restart: always
+              ports:
+                - "80:80"
+                - "443:443"
+              volumes:
+                - /etc/letsencrypt:/etc/letsencrypt:ro
+              depends_on:
+                - backend
+              networks:
+                - app-network
+
+          networks:
+            app-network:
+              driver: bridge
+          EOF
+
+          docker compose -f docker-compose.prod.yml pull
+          docker compose -f docker-compose.prod.yml up -d
