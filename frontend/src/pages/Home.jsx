@@ -1,3 +1,4 @@
+// Forçando um novo deploy - 30/09/2025
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
