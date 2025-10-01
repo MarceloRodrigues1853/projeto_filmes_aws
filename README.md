@@ -89,7 +89,8 @@ O diagrama abaixo representa a estrutura do banco de dados relacional no Amazon 
 2. **Clone o repositório:**
 
     ```bash
-    git clone [https://github.com/SEU_USUARIO/SEU_REPOSITORIO.git](https://github.com/SEU_USUARIO/SEU_REPOSITORIO.git)
+    git clone https://github.com/MarceloRodrigues1853/projeto_filmes_aws.git
+    
     cd projeto_filmes_aws
     ```
 
