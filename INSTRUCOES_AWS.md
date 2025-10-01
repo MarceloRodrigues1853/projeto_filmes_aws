@@ -38,7 +38,16 @@ Este documento descreve os passos usados para configurar os serviços da AWS.
 
 ---
 
-## 4) Integração Backend
+## 4) Amazon EC2 (Servidor da Aplicação)
+
+- Criada instância `t3.micro` com **Ubuntu 24.04**.
+- Gerado um par de chaves `.pem` para acesso via SSH.
+- Configurado **Security Group** para liberar o acesso público:
+  - Porta `22 (SSH)`: Liberada para o IP do desenvolvedor (e depois `0.0.0.0/0` para o GitHub Actions).
+  - Porta `80 (HTTP)`: Liberada para `0.0.0.0/0` (para o Certbot e redirecionamento).
+  - Porta `443 (HTTPS)`: Liberada para `0.0.0.0/0` para acesso público à aplicação.
+
+## 5) Integração Backend
 
 - `.env` do backend contém:
 
